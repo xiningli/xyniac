@@ -106,8 +106,11 @@ public class JavaAbstractConfigTest {
 
 
         executor.shutdown();
+        System.out.println(beforeChangeProperty);
+        System.out.println(afterChangeProperty);
         Assert.assertEquals(beforeChangeProperty.size(),1);
         Assert.assertEquals(afterChangeProperty.size(),1);
+
         Assert.assertEquals(beforeChangeProperty.stream().findFirst().get(), "Mike");
         Assert.assertEquals(afterChangeProperty.stream().findFirst().get(), "Jessica");
     }

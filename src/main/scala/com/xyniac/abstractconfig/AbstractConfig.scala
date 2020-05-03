@@ -22,28 +22,18 @@ import org.json4s.native.JsonMethods._
 
 import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
-
 object AbstractConfig {
   implicit val formats: DefaultFormats.type = DefaultFormats
   val runtimeMirror: universe.Mirror = universe.runtimeMirror(getClass.getClassLoader)
   val lock: ReadWriteLock = new ReentrantReadWriteLock
-  val registry: mutable.Set[AbstractConfig] = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap[AbstractConfig, java.lang.Boolean]).asScala
+  val registry: util.Set[AbstractConfig] = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap[AbstractConfig, java.lang.Boolean])
   val GSON: Gson = new Gson()
 
 
   def checkAllConfig(): JsonObject = {
 
-    val reflections = new Reflections(getClass.getPackage)
-    val classes = reflections.getSubTypesOf(classOf[AbstractConfig])
     val result = new JsonObject
-    classes.parallelStream().forEach(clazz => {
-      val canonicalName = clazz.getCanonicalName
-      val module = runtimeMirror.staticModule(canonicalName)
-      val obj = runtimeMirror.reflectModule(module)
-      val currConfig:AbstractConfig = obj.instance.asInstanceOf[AbstractConfig]
-
-      result.add(canonicalName, currConfig.getConfigJson())
-    })
+    registry.parallelStream().forEach(registered => result.add(registered.getClass.getCanonicalName, registered.getConfigJson()))
     result
   }
 }
@@ -85,6 +75,7 @@ abstract class AbstractConfig {
 
   private val coldDeployedConfigJson4j = parse(coldDeployedDefaultConfig) merge parse(coldDeployedEnvConfig) merge parse(coldDeployedIaasConfig) merge parse(coldDeployedRegionConfig)
   private val renderedConfigJson = pretty(render(coldDeployedConfigJson4j))
+
   private val coldDeployedConfig = AbstractConfig.GSON.fromJson(renderedConfigJson, classOf[JsonObject])
   private val hotDeployedConfig = new JsonObject()
 

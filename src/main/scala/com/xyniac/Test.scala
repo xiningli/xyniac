@@ -9,19 +9,25 @@ object Test {
   def main(args: Array[String]): Unit = {
     val gson = new Gson()
     case class Person(name: String, age: Int)
-    val jsonStr ="""{"name": "Mike", "age": 19}""".stripMargin
-    val jsonStr2 ="""{"name": "Mike", "age": 20, "sex": "female"}""".stripMargin
+    val jsonStrOld ="""{
+                      |  "name": "Mike",
+                      |  "city": "Stockholm"
+                      |}""".stripMargin
+    val jsonStrNew ="""{"sex": "female"}""".stripMargin
 
-    println(jsonStr)
-    val personJson = parse(jsonStr)
-    val personJson2 = parse(jsonStr2)
-    val personJson3 = personJson2 merge  personJson // new merge old
-    println("personJson3: " + personJson3)
-    val person = personJson.extract[Person]
+//    println(jsonStr)
+    val jsonOld = parse(jsonStrOld)
+//    personJson.children
+    val jsonNew = parse(jsonStrNew)
+    val personJson3 = jsonStrOld // new merge old
+    val jsonResult = jsonOld merge jsonNew
+    println("jsonResult: " + pretty(render(jsonResult)))
+//    val person = personJson.extract[Person]
 //    val person = gson.fromJson(jsonStr, classOf[Person])
-    println(person)
-    val jPerson = personJson.extract[JavaPerson]
-    println(jPerson)
+//    println(person)
+//    println(personJson)
+//    val jPerson = personJson.extract[JavaPerson]
+//    println(jPerson)
 
   }
 }

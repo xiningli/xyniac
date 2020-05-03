@@ -30,3 +30,6 @@ libraryDependencies += "org.apache.commons" % "commons-collections4" % "4.4"
 
 libraryDependencies += "org.reflections" % "reflections" % "0.9.12"
 libraryDependencies += "org.json4s" %% "json4s-native" % "3.6.7"
+//libraryDependencies += "org.json4s" %% "json4s-jackson" % "3.6.7"
+// https://mvnrepository.com/artifact/org.scala-lang/scala-actors
+libraryDependencies += "org.scala-lang" % "scala-actors" % "2.11.12"
