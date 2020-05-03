@@ -29,3 +29,4 @@ libraryDependencies += "org.apache.commons" % "commons-collections4" % "4.4"
 // https://mvnrepository.com/artifact/org.reflections/reflections// https://mvnrepository.com/artifact/org.reflections/reflections
 
 libraryDependencies += "org.reflections" % "reflections" % "0.9.12"
+libraryDependencies += "org.json4s" %% "json4s-native" % "3.6.7"
