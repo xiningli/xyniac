@@ -1,38 +1,20 @@
 package com.xyniac.abstractconfig
 
-import java.io.File
-import java.nio.file.{Files, Paths}
+import java.nio.file.{FileSystem, Files, Paths}
 import java.util.concurrent.locks.{ReadWriteLock, ReentrantReadWriteLock}
+import java.util.concurrent.{Executors, ScheduledExecutorService, ScheduledFuture, TimeUnit}
 
 import com.google.gson.{Gson, JsonObject}
-
-import scala.reflect.runtime.{currentMirror, universe}
-import scala.jdk.CollectionConverters._
-import scala.collection.concurrent.Map
-import scala.io.Source
 import com.xyniac.environment.Environment
-import com.xyniac.tool.GsonTools
-import com.xyniac.tool.GsonTools.ConflictStrategy
-import org.reflections.Reflections
-import java.util
-
-import akka.actor.ActorSystem
-import com.xyniac.abstractconfig.AbstractConfig.getClass
+import org.apache.commons.io.IOUtils
 import org.json4s._
 import org.json4s.native.JsonMethods._
-import java.util.concurrent.{ScheduledFuture, TimeUnit}
-
 import org.slf4j.LoggerFactory
 
-import scala.collection.mutable
-import scala.concurrent.{ExecutionContextExecutor, Future}
-import scala.concurrent.duration.{Duration, FiniteDuration}
-import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledExecutorService
-import java.util.stream.Collectors
-
-import org.apache.commons.io.IOUtils
-
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+import scala.io.Source
+import scala.reflect.runtime.currentMirror
 import scala.util.{Failure, Success, Try}
 object AbstractConfig {
   val confDirName:String = "conf"
@@ -93,18 +75,18 @@ object AbstractConfig {
 
 
       logger.info(registry.toString)
+      logger.info("finished loading the remote config")
     } catch {
       case e: Exception => {
-        e.printStackTrace()
-        logger.error(e.toString)
+        logger.error("error fetching the remote config" ,e)
       }
     } finally {
-      logger.info("refresh completed")
+      logger.info("process completed")
     }
   }
 
   private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor
-  lazy val handle: ScheduledFuture[_] = scheduler.scheduleWithFixedDelay(task, RemoteConfig.getInitialDelay(), RemoteConfig.getDelay(), TimeUnit.MILLISECONDS)
+  private [abstractconfig] lazy val handle: ScheduledFuture[_] = scheduler.scheduleWithFixedDelay(task, RemoteConfig.getInitialDelay(), RemoteConfig.getDelay(), TimeUnit.MILLISECONDS)
   def checkAllConfig(): JsonObject = {
 
     val result = new JsonObject
@@ -147,7 +129,6 @@ abstract class AbstractConfig {
 
   private val coldDeployedConfigJson4j = parse(coldDeployedDefaultConfig) merge parse(coldDeployedEnvConfig) merge parse(coldDeployedIaasConfig) merge parse(coldDeployedRegionConfig)
   private val renderedConfigJson = pretty(render(coldDeployedConfigJson4j))
-
   private val coldDeployedConfig = AbstractConfig.gson.fromJson(renderedConfigJson, classOf[JsonObject])
   private var hotDeployedConfig = new JsonObject()
 
@@ -161,7 +142,6 @@ abstract class AbstractConfig {
         try {
           AbstractConfig.gson.fromJson(jsonNode, value.getClass)
         } catch {
-
           case e: Exception => throw new IllegalArgumentException(s"the value of key $key in the code deploy config cannot be converted the given type")
         }
 
@@ -176,11 +156,7 @@ abstract class AbstractConfig {
     AbstractConfig.lock.readLock.lock()
     try {
       val jsonNode = if (hotDeployedConfig.has(key)) hotDeployedConfig.get(key) else coldDeployedConfig.get(key)
-      val res = AbstractConfig.gson.fromJson(jsonNode, classType)
-      res match {// TODO: add scala class fallback logic
-        case null => throw new NullPointerException
-        case _ => res
-      }
+      AbstractConfig.gson.fromJson(jsonNode, classType)
     } catch {
       case _: Exception => defaultValue match {
         case None => throw new IllegalArgumentException(s"property $key is defined nowhere")

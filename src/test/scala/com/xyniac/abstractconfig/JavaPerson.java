@@ -1,4 +1,4 @@
-package com.xyniac;
+package com.xyniac.abstractconfig;
 
 public class JavaPerson {
     String name;

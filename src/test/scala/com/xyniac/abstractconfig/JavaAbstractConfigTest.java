@@ -39,10 +39,17 @@ public class JavaAbstractConfigTest {
         long endTime = System.currentTimeMillis();
         System.out.println("trivial:" + (endTime - startTime));
     }
-    @Test(expectedExceptions = IllegalArgumentException.class)
-    public void testFail() {
+
+    @Test
+    public void testNull() {
         TestAbstractConfig$ config = TestAbstractConfig$.MODULE$;
-        Assert.assertEquals(config.getProperty("Mike2", String.class, Option.empty()), "Mike");
+        Assert.assertEquals(config.getProperty("Mike2", String.class, Option.empty()), null);
+    }
+
+    @Test
+    public void testErrorConversion() {
+        TestAbstractConfig$ config = TestAbstractConfig$.MODULE$;
+        Assert.assertEquals(config.getProperty("Mike2", String.class, Option.empty()), null);
     }
 
     @Test
