@@ -1,10 +1,14 @@
 package com.xyniac.abstractconfig
 
 import java.nio.file.FileSystem
+import java.util.concurrent.ScheduledFuture
+
+import org.slf4j.LoggerFactory
 
 object RemoteConfig extends AbstractConfig {
-
-  AbstractConfig.handle
+  private val logger = LoggerFactory.getLogger(this.getClass)
+  val trigger: ScheduledFuture[String] = AbstractConfig.handler
+  logger.info(trigger.get)
 
   def getInitialDelay(): Long = {
     getProperty("initialDelay", classOf[Long])
