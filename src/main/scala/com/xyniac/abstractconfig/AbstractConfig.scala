@@ -16,20 +16,40 @@ import com.xyniac.tool.GsonTools.ConflictStrategy
 import org.reflections.Reflections
 import java.util
 
+import akka.actor.ActorSystem
 import com.xyniac.abstractconfig.AbstractConfig.getClass
 import org.json4s._
 import org.json4s.native.JsonMethods._
+import java.util.concurrent.{ScheduledFuture, TimeUnit}
+
+import org.slf4j.LoggerFactory
 
 import scala.collection.mutable
+import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.concurrent.duration.{Duration, FiniteDuration}
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+
 import scala.util.{Failure, Success, Try}
 object AbstractConfig {
-  implicit val formats: DefaultFormats.type = DefaultFormats
-  val runtimeMirror: universe.Mirror = universe.runtimeMirror(getClass.getClassLoader)
-  val lock: ReadWriteLock = new ReentrantReadWriteLock
-  val registry: util.Set[AbstractConfig] = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap[AbstractConfig, java.lang.Boolean])
-  val GSON: Gson = new Gson()
+  private val registry: util.Set[AbstractConfig] = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap[AbstractConfig, java.lang.Boolean])
+  private lazy val fileSystem = RemoteConfig.getFileSystem()
+  private val logger = LoggerFactory.getLogger(this.getClass)
+  private implicit val formats: DefaultFormats.type = DefaultFormats
+  private val lock: ReadWriteLock = new ReentrantReadWriteLock
+  private val gson: Gson = new Gson()
 
+  private val task: Runnable = ()=>{
+    try {
+      logger.info("loading the config file system")
+      logger.info(fileSystem.toString)
+    } finally {
+      logger.info("refresh completed")
+    }
+  }
 
+  private val scheduler = Executors.newSingleThreadScheduledExecutor
+  lazy val handle= scheduler.scheduleWithFixedDelay(task, RemoteConfig.getInitialDelay(), RemoteConfig.getDelay(), TimeUnit.MILLISECONDS)
   def checkAllConfig(): JsonObject = {
 
     val result = new JsonObject
@@ -50,8 +70,6 @@ abstract class AbstractConfig {
   val jsonFileName:String = this.getClass.getName
   val confDirName:String = "conf"
 
-  // original Json Object to fall back to
-//  private val defaultConfig = AbstractConfig.GSON.fromJson(Source.fromResource(jsonFileName).mkString, classOf[JsonObject])
   val coldDeployedDefaultConfig:String = Try(Source.fromResource(Paths.get(confDirName, jsonFileName).toString).mkString) match {
     case Success(s)=>s
     case Failure(e)=> ""
@@ -76,7 +94,7 @@ abstract class AbstractConfig {
   private val coldDeployedConfigJson4j = parse(coldDeployedDefaultConfig) merge parse(coldDeployedEnvConfig) merge parse(coldDeployedIaasConfig) merge parse(coldDeployedRegionConfig)
   private val renderedConfigJson = pretty(render(coldDeployedConfigJson4j))
 
-  private val coldDeployedConfig = AbstractConfig.GSON.fromJson(renderedConfigJson, classOf[JsonObject])
+  private val coldDeployedConfig = AbstractConfig.gson.fromJson(renderedConfigJson, classOf[JsonObject])
   private val hotDeployedConfig = new JsonObject()
 
 
@@ -87,13 +105,14 @@ abstract class AbstractConfig {
       if (coldDeployedConfig.has(key)) {
         val jsonNode = coldDeployedConfig.get(key)
         try {
-          AbstractConfig.GSON.fromJson(jsonNode, value.getClass)
+          AbstractConfig.gson.fromJson(jsonNode, value.getClass)
         } catch {
+          // TODO: add scala class fallback logic
           case e: Exception => throw new IllegalArgumentException(s"the value of key $key in the code deploy config cannot be converted the given type")
         }
 
       }
-      hotDeployedConfig.add(key, AbstractConfig.GSON.toJsonTree(value))
+      hotDeployedConfig.add(key, AbstractConfig.gson.toJsonTree(value))
     } finally {
       AbstractConfig.lock.writeLock().unlock()
     }
@@ -103,7 +122,7 @@ abstract class AbstractConfig {
     AbstractConfig.lock.readLock.lock()
     try {
       val jsonNode = if (hotDeployedConfig.has(key)) hotDeployedConfig.get(key) else coldDeployedConfig.get(key)
-      val res = AbstractConfig.GSON.fromJson(jsonNode, classType)
+      val res = AbstractConfig.gson.fromJson(jsonNode, classType)
       res match {
         case null => throw new NullPointerException
         case _ => res

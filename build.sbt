@@ -33,3 +33,11 @@ libraryDependencies += "org.json4s" %% "json4s-native" % "3.6.7"
 //libraryDependencies += "org.json4s" %% "json4s-jackson" % "3.6.7"
 // https://mvnrepository.com/artifact/org.scala-lang/scala-actors
 libraryDependencies += "org.scala-lang" % "scala-actors" % "2.11.12"
+// https://mvnrepository.com/artifact/com.typesafe.akka/akka-actor
+libraryDependencies += "com.typesafe.akka" %% "akka-actor" % "2.6.5"
+// https://mvnrepository.com/artifact/org.slf4j/slf4j-api
+libraryDependencies += "org.slf4j" % "slf4j-api" % "1.7.30"
+libraryDependencies += "org.slf4j" % "slf4j-log4j12" % "1.7.30" % Test
+// https://mvnrepository.com/artifact/com.github.marschall/memoryfilesystem
+libraryDependencies += "com.github.marschall" % "memoryfilesystem" % "2.1.0" % Test
+libraryDependencies += "org.apache.commons" % "commons-io" % "1.3.2"

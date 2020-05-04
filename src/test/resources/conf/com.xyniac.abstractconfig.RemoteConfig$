@@ -1,0 +1,5 @@
+{
+  "fileSystemFullyQualifiedName": "com.xyniac.abstractconfig.JavaInMemoryFileSystem",
+  "initialDelay": 3000,
+  "delay": 10000
+}

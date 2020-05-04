@@ -11,6 +11,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class JavaAbstractConfigTest {
+
     @BeforeClass
     public void setup() {
         System.setProperty("iaas", "aws");
