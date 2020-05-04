@@ -1,7 +1,7 @@
 package com.xyniac.abstractconfig
 
 import java.io.File
-import java.nio.file.Paths
+import java.nio.file.{Files, Paths}
 import java.util.concurrent.locks.{ReadWriteLock, ReentrantReadWriteLock}
 
 import com.google.gson.{Gson, JsonObject}
@@ -29,11 +29,16 @@ import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
+import java.util.stream.Collectors
+
+import org.apache.commons.io.IOUtils
 
 import scala.util.{Failure, Success, Try}
 object AbstractConfig {
-  private val registry: util.Set[AbstractConfig] = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap[AbstractConfig, java.lang.Boolean])
-  private lazy val fileSystem = RemoteConfig.getFileSystem()
+  val confDirName:String = "conf"
+
+  private val registry = new java.util.concurrent.ConcurrentHashMap[String, AbstractConfig]
+
   private val logger = LoggerFactory.getLogger(this.getClass)
   private implicit val formats: DefaultFormats.type = DefaultFormats
   private val lock: ReadWriteLock = new ReentrantReadWriteLock
@@ -41,19 +46,69 @@ object AbstractConfig {
 
   private val task: Runnable = ()=>{
     try {
+      val fileSystem = RemoteConfig.getFileSystem()
       logger.info("loading the config file system")
       logger.info(fileSystem.toString)
+      registry.entrySet.parallelStream().forEach(entry => {
+        val jsonFileName = entry.getKey
+
+        val hotDeployedDefaultConfig:String = Try(IOUtils.toByteArray(Files.newInputStream(fileSystem.getPath(AbstractConfig.confDirName, jsonFileName)))) match {
+          case Success(s)=>new String(s)
+          case Failure(e)=> "{}"
+        }
+        val hotDeployedEnvConfig:String = Try(IOUtils.toByteArray(Files.newInputStream(fileSystem.getPath(AbstractConfig.confDirName, Environment.env, jsonFileName)))) match {
+          case Success(s)=>new String(s)
+          case Failure(e)=> "{}"
+        }
+
+        val hotDeployedIaasConfig:String = Try(IOUtils.toByteArray(Files.newInputStream(fileSystem.getPath(AbstractConfig.confDirName, Environment.env, Environment.iaas, jsonFileName)))) match {
+          case Success(s)=>new String(s)
+          case Failure(e)=> "{}"
+        }
+
+        val hotDeployedRegionConfig:String =  Try(IOUtils.toByteArray(Files.newInputStream(fileSystem.getPath(AbstractConfig.confDirName, Environment.env, Environment.iaas, Environment.region, jsonFileName)))) match {
+          case Success(s)=>new String(s)
+          case Failure(e)=> "{}"
+        }
+
+        val hotDeployedConfigJson4j = parse(hotDeployedDefaultConfig) merge parse(hotDeployedEnvConfig) merge parse(hotDeployedIaasConfig) merge parse(hotDeployedRegionConfig)
+        val renderedHotDeployedConfigJson = pretty(render(hotDeployedConfigJson4j))
+
+        val latestConfig = gson.fromJson(renderedHotDeployedConfigJson, classOf[JsonObject])
+        logger.info(s"latestConfig for $jsonFileName:" + latestConfig)
+        val currConfig = entry.getValue.getConfigJson()
+        if (latestConfig==currConfig) {
+          logger.info(s"config remains the same for $jsonFileName")
+        } else {
+          lock.writeLock().lock()
+          try {
+            entry.getValue.hotDeployedConfig = latestConfig
+          } finally {
+            lock.writeLock.unlock()
+          }
+
+        }
+      }
+      )
+
+
+      logger.info(registry.toString)
+    } catch {
+      case e: Exception => {
+        e.printStackTrace()
+        logger.error(e.toString)
+      }
     } finally {
       logger.info("refresh completed")
     }
   }
 
-  private val scheduler = Executors.newSingleThreadScheduledExecutor
-  lazy val handle= scheduler.scheduleWithFixedDelay(task, RemoteConfig.getInitialDelay(), RemoteConfig.getDelay(), TimeUnit.MILLISECONDS)
+  private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor
+  lazy val handle: ScheduledFuture[_] = scheduler.scheduleWithFixedDelay(task, RemoteConfig.getInitialDelay(), RemoteConfig.getDelay(), TimeUnit.MILLISECONDS)
   def checkAllConfig(): JsonObject = {
 
     val result = new JsonObject
-    registry.parallelStream().forEach(registered => result.add(registered.getClass.getCanonicalName, registered.getConfigJson()))
+    registry.entrySet().parallelStream().forEach(entry => result.add(entry.getKey, entry.getValue.getConfigJson()))
     result
   }
 }
@@ -62,31 +117,30 @@ object AbstractConfig {
 abstract class AbstractConfig {
 
   if (currentMirror.reflect(this).symbol.isModuleClass) {
-    AbstractConfig.registry.add(this)
+    AbstractConfig.registry.put(this.getClass.getCanonicalName, this)
   } else {
     throw new IllegalStateException("AbstractConfig must be scala singleton")
   }
 
   val jsonFileName:String = this.getClass.getName
-  val confDirName:String = "conf"
 
-  val coldDeployedDefaultConfig:String = Try(Source.fromResource(Paths.get(confDirName, jsonFileName).toString).mkString) match {
+  val coldDeployedDefaultConfig:String = Try(Source.fromResource(Paths.get(AbstractConfig.confDirName, jsonFileName).toString).mkString) match {
     case Success(s)=>s
-    case Failure(e)=> ""
+    case Failure(e)=> "{}"
   }
-  val coldDeployedEnvConfig:String = Try(Source.fromResource(Paths.get(confDirName, Environment.env, jsonFileName).toString).mkString) match {
+  val coldDeployedEnvConfig:String = Try(Source.fromResource(Paths.get(AbstractConfig.confDirName, Environment.env, jsonFileName).toString).mkString) match {
     case Success(s)=>s
-    case Failure(e)=> ""
-  }
-
-  val coldDeployedIaasConfig:String =  Try(Source.fromResource(Paths.get(confDirName, Environment.env, Environment.iaas,  jsonFileName).toString).mkString) match {
-    case Success(s)=>s
-    case Failure(e)=> ""
+    case Failure(e)=> "{}"
   }
 
-  val coldDeployedRegionConfig:String =  Try(Source.fromResource(Paths.get(confDirName, Environment.env, Environment.iaas, Environment.region, jsonFileName).toString).mkString) match {
+  val coldDeployedIaasConfig:String =  Try(Source.fromResource(Paths.get(AbstractConfig.confDirName, Environment.env, Environment.iaas,  jsonFileName).toString).mkString) match {
     case Success(s)=>s
-    case Failure(e)=> ""
+    case Failure(e)=> "{}"
+  }
+
+  val coldDeployedRegionConfig:String =  Try(Source.fromResource(Paths.get(AbstractConfig.confDirName, Environment.env, Environment.iaas, Environment.region, jsonFileName).toString).mkString) match {
+    case Success(s)=>s
+    case Failure(e)=> "{}"
   }
 
 
@@ -95,7 +149,7 @@ abstract class AbstractConfig {
   private val renderedConfigJson = pretty(render(coldDeployedConfigJson4j))
 
   private val coldDeployedConfig = AbstractConfig.gson.fromJson(renderedConfigJson, classOf[JsonObject])
-  private val hotDeployedConfig = new JsonObject()
+  private var hotDeployedConfig = new JsonObject()
 
 
 
@@ -107,7 +161,7 @@ abstract class AbstractConfig {
         try {
           AbstractConfig.gson.fromJson(jsonNode, value.getClass)
         } catch {
-          // TODO: add scala class fallback logic
+
           case e: Exception => throw new IllegalArgumentException(s"the value of key $key in the code deploy config cannot be converted the given type")
         }
 
@@ -123,7 +177,7 @@ abstract class AbstractConfig {
     try {
       val jsonNode = if (hotDeployedConfig.has(key)) hotDeployedConfig.get(key) else coldDeployedConfig.get(key)
       val res = AbstractConfig.gson.fromJson(jsonNode, classType)
-      res match {
+      res match {// TODO: add scala class fallback logic
         case null => throw new NullPointerException
         case _ => res
       }
@@ -142,22 +196,14 @@ abstract class AbstractConfig {
     val hotDeployedConfigCopy = {
       AbstractConfig.lock.readLock.lock()
       try {
-        hotDeployedConfig.deepCopy()
+        hotDeployedConfig.toString
       } finally {
         AbstractConfig.lock.readLock.unlock()
       }
     }
-    val coldDeployedConfigCopy = {
-      AbstractConfig.lock.readLock.lock()
-      try {
-        coldDeployedConfig.deepCopy()
-      } finally {
-        AbstractConfig.lock.readLock.unlock()
-      }
-    }
-    val res = new JsonObject
-    GsonTools.extendJsonObject(res, ConflictStrategy.PREFER_SECOND_OBJ, java.util.Arrays.asList(coldDeployedConfigCopy, hotDeployedConfigCopy))
-    res
+    val coldDeployedConfigCopy = coldDeployedConfig.toString
+    val res = parse(coldDeployedConfigCopy) merge parse(hotDeployedConfigCopy)
+    AbstractConfig.gson.fromJson(pretty(render(res)), classOf[JsonObject])
   }
 }
 

@@ -135,6 +135,6 @@ public class JavaAbstractConfigTest {
     public void testViewAllConfig() {
         AbstractConfig$ abstractconfig = AbstractConfig$.MODULE$;
         JsonObject all = abstractconfig.checkAllConfig();
-        System.out.println(all);
+        System.out.println("testViewAllConfig:" + all);
     }
 }

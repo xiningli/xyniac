@@ -9,7 +9,7 @@ import com.github.marschall.memoryfilesystem.MemoryFileSystemBuilder
 
 class InMemoryFileSystem extends FileSystem {
   val inMemFileStore: FileSystem = MemoryFileSystemBuilder.newLinux().build()
-  println("initiated file system")
+  InMemFsTest.fileSystemTestSuccessFlag.set(true)
   override def provider(): FileSystemProvider = inMemFileStore.provider()
 
   override def close(): Unit = inMemFileStore.close()
@@ -33,4 +33,6 @@ class InMemoryFileSystem extends FileSystem {
   override def getUserPrincipalLookupService: UserPrincipalLookupService = inMemFileStore.getUserPrincipalLookupService()
 
   override def newWatchService(): WatchService = inMemFileStore.newWatchService()
+
+  override def toString: String = "scala file system for testing purpose"
 }
