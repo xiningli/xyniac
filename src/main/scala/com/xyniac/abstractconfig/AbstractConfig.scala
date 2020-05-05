@@ -42,11 +42,10 @@ object AbstractConfig {
     logger.info("loading the config file system")
 
     fileSystem.onComplete {
-      case Success(fs) => Try{
+      case Success(fs) => Try {
         logger.info(s"loaded the config file system $fs")
         logger.info(fileSystem.toString)
 
-//        val configToReplace = new java.util.concurrent.ConcurrentHashMap[String, JsonObject]
         val parallelFuturesKeyConfigString = registry.keys.map(key => {
           logger.info(s"scanning the updated config for $key")
           val jsonFileName = key
@@ -76,28 +75,23 @@ object AbstractConfig {
         })
 
         val configToReplace = parallelFuturesKeyConfigString.map(futureKeyConfig => {
-          logger.warn("printing the futureKeyConfig" + futureKeyConfig.toString)
           val value = Await.result(futureKeyConfig._2, RemoteConfig.getDelay().milliseconds)
           (futureKeyConfig._1, value)
         }).map(keyConfigString => (keyConfigString._1, gson.fromJson(keyConfigString._2, classOf[JsonObject])))
-            .filterNot(keyConfigObject => {
-              val flag = registry(keyConfigObject._1).getConfigJson().equals(keyConfigObject._2)
-              println(keyConfigObject._1,flag)
-              flag
-            })
+          .filterNot(keyConfigObject => {
+            val flag = registry(keyConfigObject._1).getConfigJson().equals(keyConfigObject._2)
+            logger.info("printing replacement info:" + (keyConfigObject._1, flag))
+            flag
+          })
 
 
-
-        if (configToReplace.size>0) {
-          logger.warn("configToReplace")
-          configToReplace.foreach(println(_))
+        if (configToReplace.nonEmpty) {
 
           lock.writeLock().lock()
           try {
-            configToReplace.par.foreach(nc => {
+            configToReplace.foreach(nc => {
               val obsoletedConfig = registry.get(nc._1)
-              logger.warn("replacing config of " + nc._1)
-              logger.warn(obsoletedConfig.get.hotDeployedConfig + " becomes " + nc._2)
+              logger.warn("replacing the hot deployed config of: " + nc._1 + " from " + obsoletedConfig.get.hotDeployedConfig + " to " + nc._2)
               obsoletedConfig.get.hotDeployedConfig = nc._2
             })
           } catch {
@@ -110,7 +104,6 @@ object AbstractConfig {
           }
 
         }
-
 
 
       } match {
@@ -211,14 +204,9 @@ abstract class AbstractConfig {
   }
 
   def getConfigJson(): JsonObject = {
-    val hotDeployedConfigCopy = {
-      AbstractConfig.lock.readLock.lock()
-      try {
-        hotDeployedConfig.toString
-      } finally {
-        AbstractConfig.lock.readLock.unlock()
-      }
-    }
+    AbstractConfig.lock.readLock.lock()
+    val hotDeployedConfigCopy = hotDeployedConfig.toString
+    AbstractConfig.lock.readLock.unlock()
     val coldDeployedConfigCopy = coldDeployedConfig.toString
     val res = parse(coldDeployedConfigCopy) merge parse(hotDeployedConfigCopy)
     AbstractConfig.gson.fromJson(pretty(render(res)), classOf[JsonObject])

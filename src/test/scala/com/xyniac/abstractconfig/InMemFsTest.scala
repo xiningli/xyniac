@@ -50,7 +50,7 @@ class InMemFsTest extends FunSuite {
     Thread.sleep(20000)
     Files.write(fs.getPath(conf, RemoteConfig.getClass.getCanonicalName), newTarget.getBytes())
     println("written the new config")
-    Thread.sleep(400000)
+    Thread.sleep(40000)
 
     assert(InMemFsTest.fileSystemTestSuccessFlag.get())
 
