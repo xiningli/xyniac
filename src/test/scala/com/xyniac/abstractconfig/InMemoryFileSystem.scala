@@ -8,7 +8,7 @@ import java.{lang, util}
 import com.github.marschall.memoryfilesystem.MemoryFileSystemBuilder
 
 class InMemoryFileSystem extends FileSystem {
-  val inMemFileStore: FileSystem = MemoryFileSystemBuilder.newLinux().build()
+  val inMemFileStore: FileSystem = JavaInMemoryFileSystem.inMemFileStore
   InMemFsTest.fileSystemTestSuccessFlag.set(true)
   override def provider(): FileSystemProvider = inMemFileStore.provider()
 

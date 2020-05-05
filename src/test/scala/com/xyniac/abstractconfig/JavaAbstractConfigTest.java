@@ -60,12 +60,6 @@ public class JavaAbstractConfigTest {
 
     }
 
-    @Test(expectedExceptions = IllegalArgumentException.class)
-    public void testResetFail(){
-        TestAbstractConfig$ config = TestAbstractConfig$.MODULE$;
-        config.setProperty("name", 1);
-    }
-
     @Test
     public void testReadWriteLock() {
         final int nTest = 1000000;
