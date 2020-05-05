@@ -9,7 +9,7 @@ resolvers ++= Seq(
 scalaVersion := "2.13.0"
 libraryDependencies += "org.scala-lang" % "scala-compiler" % "2.13.0"
 //libraryDependencies += "com.twitter" %% "util-eval" % "6.40.0"
-libraryDependencies += "org.scala-lang" % "scala-reflect" % "2.13.0"
+//libraryDependencies += "org.scala-lang" % "scala-reflect" % "2.13.0"
 
 retrieveManaged := true
 
@@ -17,6 +17,8 @@ updateOptions := updateOptions.value.withCachedResolution(true)
 //XitrumPackage.copy("dirToCopy", "fileToCopy")
 
 libraryDependencies += "com.google.code.gson" % "gson" % "2.8.6"
+// https://mvnrepository.com/artifact/org.scala-lang.modules/scala-parallel-collections
+libraryDependencies += "org.scala-lang.modules" %% "scala-parallel-collections" % "0.2.0"
 
 //addSbtPlugin("com.github.battermann" % "sbt-json" % "0.5.0")
 // https://mvnrepository.com/artifact/org.testng/testng

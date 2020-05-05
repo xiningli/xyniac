@@ -5,6 +5,7 @@ import java.nio.file.{FileSystem, Files, Paths}
 import java.util.concurrent.locks.{ReadWriteLock, ReentrantReadWriteLock}
 import java.util.concurrent.{Callable, Executors, ScheduledExecutorService, ScheduledFuture, TimeUnit}
 
+import scala.jdk.CollectionConverters._
 import com.google.gson.{Gson, JsonObject}
 import com.xyniac.environment.Environment
 import org.apache.commons.io.IOUtils
@@ -13,34 +14,40 @@ import org.json4s.native.JsonMethods._
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
+import scala.concurrent.{Await, Future}
 import scala.io.Source
 import scala.reflect.runtime.currentMirror
 import scala.util.{Failure, Success, Try}
+import scala.collection.concurrent.Map
+import scala.collection.parallel
 
 object AbstractConfig {
   val confDirName: String = "conf"
 
-  private val registry = new java.util.concurrent.ConcurrentHashMap[String, AbstractConfig]
+  private val registry = new scala.collection.parallel.mutable.ParTrieMap[String, AbstractConfig]
 
   private val logger = LoggerFactory.getLogger(this.getClass)
   private implicit val formats: DefaultFormats.type = DefaultFormats
   private val lock: ReadWriteLock = new ReentrantReadWriteLock
   private val gson: Gson = new Gson()
   private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor
-  private [abstractconfig] lazy val handler: ScheduledFuture[String] = scheduler.schedule(task, RemoteConfig.getInitialDelay(), TimeUnit.MILLISECONDS)
+  private[abstractconfig] lazy val handler: ScheduledFuture[String] = {
+    logger.info("initial task handler triggered")
+    scheduler.schedule(task, RemoteConfig.getInitialDelay(), TimeUnit.MILLISECONDS)
+  }
 
   private val task: Callable[String] = () => {
     val fileSystem = Future(RemoteConfig.getFileSystem())
     logger.info("loading the config file system")
 
     fileSystem.onComplete {
-      case Success(fs) => {
+      case Success(fs) => Try{
         logger.info(s"loaded the config file system $fs")
         logger.info(fileSystem.toString)
-        registry.entrySet.parallelStream().forEach(entry => {
-          val jsonFileName = entry.getKey
 
+//        val configToReplace = new java.util.concurrent.ConcurrentHashMap[String, JsonObject]
+        val parallelFuturesKeyConfigString = registry.par.keys.map(key => {
+          val jsonFileName = key
           val hotDeployedDefaultConfigFuture: Future[String] =
             Future(new String(IOUtils.toByteArray(Files.newInputStream(fs.getPath(AbstractConfig.confDirName, jsonFileName)))))
               .recover { case e: Exception => "{}" }
@@ -57,37 +64,54 @@ object AbstractConfig {
             Future(new String(IOUtils.toByteArray(Files.newInputStream(fs.getPath(AbstractConfig.confDirName, Environment.env, Environment.iaas, Environment.region, jsonFileName)))))
               .recover { case e: Exception => "{}" }
 
-          val hotDeployedConfigCombined = for {
+          val hotDeployedConfigCombinedFuture: Future[String] = for {
             hotDeployedDefaultConfig <- hotDeployedDefaultConfigFuture
             hotDeployedEnvConfig <- hotDeployedEnvConfigFuture
             hotDeployedIaasConfig <- hotDeployedIaasConfigFuture
             hotDeployedRegionConfig <- hotDeployedRegionConfigFuture
           } yield pretty(render(parse(hotDeployedDefaultConfig) merge parse(hotDeployedEnvConfig) merge parse(hotDeployedIaasConfig) merge parse(hotDeployedRegionConfig)))
-
-          hotDeployedConfigCombined.onComplete {
-            case Success(s) => {
-              val latestConfig = gson.fromJson(s, classOf[JsonObject])
-              logger.info(s"latestConfig for $jsonFileName:" + latestConfig)
-              val currConfig = entry.getValue.getConfigJson()
-              if (latestConfig == currConfig) {
-                logger.info(s"config remains the same for $jsonFileName")
-              } else {
-                lock.writeLock().lock()
-                try {
-                  logger.info("replacing the config to a newer version")
-                  entry.getValue.hotDeployedConfig = latestConfig
-                } finally {
-                  lock.writeLock.unlock()
-                }
-              }
-              scheduler.schedule(task, RemoteConfig.getDelay(), TimeUnit.MILLISECONDS)
-            }
-            case Failure(e) => {
-              logger.error("error parsing the remote config json files", e)
-              scheduler.schedule(task, RemoteConfig.getInitialDelay(), TimeUnit.MILLISECONDS)
-            }
-          }
+          (key, hotDeployedConfigCombinedFuture)
         })
+
+        val configToReplace = parallelFuturesKeyConfigString.map(futureKeyConfig => futureKeyConfig._2.value.get match {
+          case Success(s) => (futureKeyConfig._1, s)
+          case Failure(e) => {
+            logger.error("illegal state! ", e)
+            throw new IllegalStateException
+          }
+        }).map(keyConfigString => (keyConfigString._1, gson.fromJson(keyConfigString._2, classOf[JsonObject])))
+            .filter(keyConfigObject => !registry(keyConfigObject._1).getConfigJson().equals(keyConfigObject._2))
+
+
+
+        logger.warn("configToReplace")
+        configToReplace.foreach(println(_))
+        lock.writeLock().lock()
+        try {
+          configToReplace.par.foreach(nc => {
+            val obsoletedConfig = registry.get(nc._1)
+            logger.warn("replacing config of " + nc._1)
+            obsoletedConfig.get.hotDeployedConfig = nc._2
+          })
+        } catch {
+          case e: Exception => {
+            e.printStackTrace()
+            logger.error("error on replacing the config due to: ", e)
+          }
+        } finally {
+          lock.writeLock().unlock()
+        }
+
+
+
+      } match {
+        case Success(s) => {
+          scheduler.schedule(task, RemoteConfig.getDelay(), TimeUnit.MILLISECONDS)
+        }
+        case Failure(e) => {
+          logger.error("error here xxxx", e)
+          scheduler.schedule(task, RemoteConfig.getInitialDelay(), TimeUnit.MILLISECONDS)
+        }
       }
       case Failure(e) => {
         logger.error("error initiating the file system instance, reschedule remote config reloading task", e)
@@ -99,7 +123,7 @@ object AbstractConfig {
 
   def checkAllConfig(): JsonObject = {
     val result = new JsonObject
-    registry.entrySet().parallelStream().forEach(entry => result.add(entry.getKey, entry.getValue.getConfigJson()))
+    registry.keys.par.foreach(key => result.add(key, registry(key).getConfigJson()))
     result
   }
 
