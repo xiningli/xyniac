@@ -4,6 +4,7 @@ import java.lang.{Exception, RuntimeException, Throwable}
 import java.nio.file.{FileSystem, Files, Paths}
 import java.util.concurrent.locks.{ReadWriteLock, ReentrantReadWriteLock}
 import java.util.concurrent.{Callable, Executors, ScheduledExecutorService, ScheduledFuture, TimeUnit}
+import scala.concurrent.duration._
 
 import scala.jdk.CollectionConverters._
 import com.google.gson.{Gson, JsonObject}
@@ -24,7 +25,7 @@ import scala.collection.parallel
 object AbstractConfig {
   val confDirName: String = "conf"
 
-  private val registry = new scala.collection.parallel.mutable.ParTrieMap[String, AbstractConfig]
+  private val registry = new scala.collection.parallel.mutable.ParHashMap[String, AbstractConfig]
 
   private val logger = LoggerFactory.getLogger(this.getClass)
   private implicit val formats: DefaultFormats.type = DefaultFormats
@@ -46,7 +47,8 @@ object AbstractConfig {
         logger.info(fileSystem.toString)
 
 //        val configToReplace = new java.util.concurrent.ConcurrentHashMap[String, JsonObject]
-        val parallelFuturesKeyConfigString = registry.par.keys.map(key => {
+        val parallelFuturesKeyConfigString = registry.keys.map(key => {
+          logger.info(s"scanning the updated config for $key")
           val jsonFileName = key
           val hotDeployedDefaultConfigFuture: Future[String] =
             Future(new String(IOUtils.toByteArray(Files.newInputStream(fs.getPath(AbstractConfig.confDirName, jsonFileName)))))
@@ -73,39 +75,47 @@ object AbstractConfig {
           (key, hotDeployedConfigCombinedFuture)
         })
 
-        val configToReplace = parallelFuturesKeyConfigString.map(futureKeyConfig => futureKeyConfig._2.value.get match {
-          case Success(s) => (futureKeyConfig._1, s)
-          case Failure(e) => {
-            logger.error("illegal state! ", e)
-            throw new IllegalStateException
-          }
+        val configToReplace = parallelFuturesKeyConfigString.map(futureKeyConfig => {
+          logger.warn("printing the futureKeyConfig" + futureKeyConfig.toString)
+          val value = Await.result(futureKeyConfig._2, RemoteConfig.getDelay().milliseconds)
+          (futureKeyConfig._1, value)
         }).map(keyConfigString => (keyConfigString._1, gson.fromJson(keyConfigString._2, classOf[JsonObject])))
-            .filter(keyConfigObject => !registry(keyConfigObject._1).getConfigJson().equals(keyConfigObject._2))
+            .filterNot(keyConfigObject => {
+              val flag = registry(keyConfigObject._1).getConfigJson().equals(keyConfigObject._2)
+              println(keyConfigObject._1,flag)
+              flag
+            })
 
 
 
-        logger.warn("configToReplace")
-        configToReplace.foreach(println(_))
-        lock.writeLock().lock()
-        try {
-          configToReplace.par.foreach(nc => {
-            val obsoletedConfig = registry.get(nc._1)
-            logger.warn("replacing config of " + nc._1)
-            obsoletedConfig.get.hotDeployedConfig = nc._2
-          })
-        } catch {
-          case e: Exception => {
-            e.printStackTrace()
-            logger.error("error on replacing the config due to: ", e)
+        if (configToReplace.size>0) {
+          logger.warn("configToReplace")
+          configToReplace.foreach(println(_))
+
+          lock.writeLock().lock()
+          try {
+            configToReplace.par.foreach(nc => {
+              val obsoletedConfig = registry.get(nc._1)
+              logger.warn("replacing config of " + nc._1)
+              logger.warn(obsoletedConfig.get.hotDeployedConfig + " becomes " + nc._2)
+              obsoletedConfig.get.hotDeployedConfig = nc._2
+            })
+          } catch {
+            case e: Exception => {
+              e.printStackTrace()
+              logger.error("error on replacing the config due to: ", e)
+            }
+          } finally {
+            lock.writeLock().unlock()
           }
-        } finally {
-          lock.writeLock().unlock()
+
         }
 
 
 
       } match {
         case Success(s) => {
+          logger.info("refreshing task successful")
           scheduler.schedule(task, RemoteConfig.getDelay(), TimeUnit.MILLISECONDS)
         }
         case Failure(e) => {
