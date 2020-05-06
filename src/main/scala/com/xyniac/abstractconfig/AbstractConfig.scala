@@ -90,8 +90,6 @@ object AbstractConfig {
 
             try {
               lock.writeLock().lock()
-              val multiThreadTestClass = new MultiThreadTestClass();
-              multiThreadTestClass.testMethod()
               configToReplace.par.foreach(nc => {
                 val obsoletedConfig = registry.get(nc._1)
                 logger.warn("replacing the hot deployed config of: " + nc._1 + " from " + obsoletedConfig.get.hotDeployedConfig + " to " + nc._2)
@@ -101,6 +99,9 @@ object AbstractConfig {
               case e: Exception => {
                 e.printStackTrace()
                 logger.error("error on replacing the config due to: ", e)
+              }
+              case error: Error => {
+                logger.error("SEVERE ERROR OCCURRED! ", error)
               }
             } finally {
               lock.writeLock().unlock()
