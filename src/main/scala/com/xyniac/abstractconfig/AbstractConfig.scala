@@ -21,6 +21,7 @@ import scala.reflect.runtime.currentMirror
 import scala.util.{Failure, Success, Try}
 import scala.collection.concurrent.Map
 import scala.collection.parallel
+import scala.concurrent.blocking
 
 // TODO: research on NONE vs null
 // TODO: json fallback logic
@@ -53,28 +54,28 @@ object AbstractConfig {
           val parallelFuturesKeyConfigString = registry.keys.par.map(key => {
             logger.info(s"scanning the updated config for $key")
             val jsonFileName = key
-            val hotDeployedDefaultConfigFuture: Future[String] =
-              Future(new String(IOUtils.toByteArray(Files.newInputStream(fs.getPath(AbstractConfig.confDirName, jsonFileName)))))
-                .recover { case e: Exception => "{}" }
+            val hotDeployedDefaultConfigFuture =
+              Future(parse(new String(IOUtils.toByteArray(Files.newInputStream(fs.getPath(AbstractConfig.confDirName, jsonFileName))))))
+                .recover { case e: Exception => parse("{}") }
 
-            val hotDeployedEnvConfigFuture: Future[String] =
-              Future(new String(IOUtils.toByteArray(Files.newInputStream(fs.getPath(AbstractConfig.confDirName, Environment.env, jsonFileName)))))
-                .recover { case e: Exception => "{}" }
+            val hotDeployedEnvConfigFuture =
+              Future(parse(new String(IOUtils.toByteArray(Files.newInputStream(fs.getPath(AbstractConfig.confDirName, Environment.env, jsonFileName))))))
+                .recover { case e: Exception => parse("{}") }
 
-            val hotDeployedIaasConfigFuture: Future[String] =
-              Future(new String(IOUtils.toByteArray(Files.newInputStream(fs.getPath(AbstractConfig.confDirName, Environment.env, Environment.iaas, jsonFileName)))))
-                .recover { case e: Exception => "{}" }
+            val hotDeployedIaasConfigFuture =
+              Future(parse(new String(IOUtils.toByteArray(Files.newInputStream(fs.getPath(AbstractConfig.confDirName, Environment.env, Environment.iaas, jsonFileName))))))
+                .recover { case e: Exception => parse("{}") }
 
-            val hotDeployedRegionConfigFuture: Future[String] =
-              Future(new String(IOUtils.toByteArray(Files.newInputStream(fs.getPath(AbstractConfig.confDirName, Environment.env, Environment.iaas, Environment.region, jsonFileName)))))
-                .recover { case e: Exception => "{}" }
+            val hotDeployedRegionConfigFuture =
+              Future(parse(new String(IOUtils.toByteArray(Files.newInputStream(fs.getPath(AbstractConfig.confDirName, Environment.env, Environment.iaas, Environment.region, jsonFileName))))))
+                .recover { case e: Exception => parse("{}") }
 
             val hotDeployedConfigCombinedFuture: Future[String] = for {
               hotDeployedDefaultConfig <- hotDeployedDefaultConfigFuture
               hotDeployedEnvConfig <- hotDeployedEnvConfigFuture
               hotDeployedIaasConfig <- hotDeployedIaasConfigFuture
               hotDeployedRegionConfig <- hotDeployedRegionConfigFuture
-            } yield pretty(render(parse(hotDeployedDefaultConfig) merge parse(hotDeployedEnvConfig) merge parse(hotDeployedIaasConfig) merge parse(hotDeployedRegionConfig)))
+            } yield pretty(render(hotDeployedDefaultConfig merge hotDeployedEnvConfig merge hotDeployedIaasConfig merge hotDeployedRegionConfig))
             (key, hotDeployedConfigCombinedFuture)
           })
 
