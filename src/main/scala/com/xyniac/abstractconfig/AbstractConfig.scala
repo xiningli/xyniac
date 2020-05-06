@@ -32,8 +32,7 @@ object AbstractConfig {
 
   private val logger = LoggerFactory.getLogger(this.getClass)
   private implicit val formats: DefaultFormats.type = DefaultFormats
-  // TODO: set the lock back to private
-  val lock: ReadWriteLock = new ReentrantReadWriteLock
+  private val lock: ReadWriteLock = new ReentrantReadWriteLock
   private val gson: Gson = new Gson()
   private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor
   private[abstractconfig] lazy val handler: ScheduledFuture[String] = {
