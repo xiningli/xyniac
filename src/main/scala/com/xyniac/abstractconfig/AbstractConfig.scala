@@ -21,7 +21,9 @@ import scala.reflect.runtime.currentMirror
 import scala.util.{Failure, Success, Try}
 import scala.collection.concurrent.Map
 import scala.collection.parallel
-
+// TODO: check the super many threads read while writing
+// TODO: json fallback logic
+// TODO: manager blocker
 object AbstractConfig {
   val confDirName: String = "conf"
 
@@ -29,7 +31,8 @@ object AbstractConfig {
 
   private val logger = LoggerFactory.getLogger(this.getClass)
   private implicit val formats: DefaultFormats.type = DefaultFormats
-  private val lock: ReadWriteLock = new ReentrantReadWriteLock
+  // TODO: set the lock back to private
+  val lock: ReadWriteLock = new ReentrantReadWriteLock
   private val gson: Gson = new Gson()
   private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor
   private[abstractconfig] lazy val handler: ScheduledFuture[String] = {
@@ -47,7 +50,7 @@ object AbstractConfig {
           logger.info(s"loaded the config file system $fs")
           logger.info(fileSystem.toString)
 
-          val parallelFuturesKeyConfigString = registry.keys.map(key => {
+          val parallelFuturesKeyConfigString = registry.keys.par.map(key => {
             logger.info(s"scanning the updated config for $key")
             val jsonFileName = key
             val hotDeployedDefaultConfigFuture: Future[String] =
@@ -84,9 +87,12 @@ object AbstractConfig {
 
           if (configToReplace.nonEmpty) {
 
-            lock.writeLock().lock()
+
             try {
-              configToReplace.foreach(nc => {
+              lock.writeLock().lock()
+              val multiThreadTestClass = new MultiThreadTestClass();
+              multiThreadTestClass.testMethod()
+              configToReplace.par.foreach(nc => {
                 val obsoletedConfig = registry.get(nc._1)
                 logger.warn("replacing the hot deployed config of: " + nc._1 + " from " + obsoletedConfig.get.hotDeployedConfig + " to " + nc._2)
                 obsoletedConfig.get.hotDeployedConfig = Some(nc._2)
@@ -109,7 +115,7 @@ object AbstractConfig {
             scheduler.schedule(task, RemoteConfig.getDelay(), TimeUnit.MILLISECONDS)
           }
           case Failure(e) => {
-            logger.error("error here xxxx", e)
+            logger.error("error loading the config from file system", e)
             scheduler.schedule(task, RemoteConfig.getInitialDelay(), TimeUnit.MILLISECONDS)
           }
         }
