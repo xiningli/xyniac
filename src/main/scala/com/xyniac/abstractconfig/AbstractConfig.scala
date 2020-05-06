@@ -6,7 +6,6 @@ import java.util.concurrent.locks.{ReadWriteLock, ReentrantReadWriteLock}
 import java.util.concurrent.{Callable, Executors, ScheduledExecutorService, ScheduledFuture, TimeUnit}
 import scala.concurrent.duration._
 
-import scala.jdk.CollectionConverters._
 import com.google.gson.{Gson, JsonObject}
 import com.xyniac.environment.Environment
 import org.apache.commons.io.IOUtils
@@ -23,9 +22,6 @@ import scala.collection.concurrent.Map
 import scala.collection.parallel
 import scala.concurrent.blocking
 
-// TODO: research on NONE vs null
-// TODO: json fallback logic
-// TODO: manager blocker
 object AbstractConfig {
   val confDirName: String = "conf"
 
