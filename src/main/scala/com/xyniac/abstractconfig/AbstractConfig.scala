@@ -21,7 +21,8 @@ import scala.reflect.runtime.currentMirror
 import scala.util.{Failure, Success, Try}
 import scala.collection.concurrent.Map
 import scala.collection.parallel
-// TODO: check the super many threads read while writing
+
+// TODO: research on NONE vs null
 // TODO: json fallback logic
 // TODO: manager blocker
 object AbstractConfig {
@@ -87,17 +88,15 @@ object AbstractConfig {
 
           if (configToReplace.nonEmpty) {
 
-
+            logger.info("start updating the hotDeployedConfig pointer")
             try {
               lock.writeLock().lock()
               configToReplace.par.foreach(nc => {
                 val obsoletedConfig = registry.get(nc._1)
-                logger.warn("replacing the hot deployed config of: " + nc._1 + " from " + obsoletedConfig.get.hotDeployedConfig + " to " + nc._2)
-                obsoletedConfig.get.hotDeployedConfig = Some(nc._2)
+                obsoletedConfig.get.hotDeployedConfig = nc._2
               })
             } catch {
               case e: Exception => {
-                e.printStackTrace()
                 logger.error("error on replacing the config due to: ", e)
               }
               case error: Error => {
@@ -105,6 +104,7 @@ object AbstractConfig {
               }
             } finally {
               lock.writeLock().unlock()
+              logger.info("hotDeployedConfig pointer updating finished")
             }
 
           }
@@ -173,16 +173,16 @@ abstract class AbstractConfig {
   private val coldDeployedConfigJson4j = parse(coldDeployedDefaultConfig) merge parse(coldDeployedEnvConfig) merge parse(coldDeployedIaasConfig) merge parse(coldDeployedRegionConfig)
   private val renderedConfigJson = pretty(render(coldDeployedConfigJson4j))
   private val coldDeployedConfig = AbstractConfig.gson.fromJson(renderedConfigJson, classOf[JsonObject])
-  private[abstractconfig] var hotDeployedConfig:Option[JsonObject] = None
+  private[abstractconfig] var hotDeployedConfig:JsonObject = null
 
 
   def setProperty[T](key: String, value: T): Unit = {
     AbstractConfig.lock.writeLock().lock()
     try {
-      if (hotDeployedConfig.isEmpty) {
-        hotDeployedConfig = Some(new JsonObject())
+      if (hotDeployedConfig==null) {
+        hotDeployedConfig = new JsonObject()
       }
-      hotDeployedConfig.get.add(key, AbstractConfig.gson.toJsonTree(value))
+      hotDeployedConfig.add(key, AbstractConfig.gson.toJsonTree(value))
     } finally {
       AbstractConfig.lock.writeLock().unlock()
     }
@@ -192,10 +192,7 @@ abstract class AbstractConfig {
     AbstractConfig.lock.readLock.lock()
     try {
       // TODO: think about handling the null attribute
-      val jsonNode = hotDeployedConfig match {
-        case Some(hot) => hot.get(key)
-        case None => coldDeployedConfig.get(key)
-      }
+      val jsonNode = if (hotDeployedConfig!=null) hotDeployedConfig.get(key) else coldDeployedConfig.get(key)
       AbstractConfig.gson.fromJson(jsonNode, classType)
     } catch {
       case _: Exception => defaultValue match {
@@ -209,16 +206,14 @@ abstract class AbstractConfig {
   }
 
   def getConfigJson(): JsonObject = {
-    hotDeployedConfig match {
-      case Some(hot) => {
-        AbstractConfig.lock.readLock.lock()
-        val res = hot
-        AbstractConfig.lock.readLock.unlock()
-        res
-      }
-      case None => coldDeployedConfig
+    if (hotDeployedConfig==null) {
+      coldDeployedConfig
+    } else {
+      AbstractConfig.lock.readLock.lock()
+      val res = hotDeployedConfig.deepCopy()
+      AbstractConfig.lock.readLock.unlock()
+      res
     }
-
   }
 }
 
