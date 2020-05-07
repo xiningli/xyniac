@@ -32,11 +32,6 @@ object AbstractConfig {
   private val lock: ReadWriteLock = new ReentrantReadWriteLock
   private val gson: Gson = new Gson()
   private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor
-  private[abstractconfig] lazy val handler: ScheduledFuture[String] = {
-    logger.info("initial task handler triggered")
-    val initialDelay = RemoteConfig.getInitialDelay()
-    scheduler.schedule(task, initialDelay, TimeUnit.MILLISECONDS)
-  }
 
   private val task: Callable[String] = () => {
     val fileSystem = Future(RemoteConfig.getFileSystem())
@@ -114,7 +109,7 @@ object AbstractConfig {
           }
           case Failure(e) => {
             logger.error("error loading the config from file system", e)
-            scheduler.schedule(task, RemoteConfig.getInitialDelay(), TimeUnit.MILLISECONDS)
+            scheduler.schedule(task, coldDeployedInitialDelay, TimeUnit.MILLISECONDS)
           }
         }
       } else {
@@ -123,10 +118,16 @@ object AbstractConfig {
       }
       case Failure(e) => {
         logger.error("error initiating the file system instance, reschedule remote config reloading task", e)
-        scheduler.schedule(task, RemoteConfig.getInitialDelay(), TimeUnit.MILLISECONDS)
+        scheduler.schedule(task, coldDeployedInitialDelay, TimeUnit.MILLISECONDS)
       }
     }
     "triggered the task handler"
+  }
+  private val coldDeployedInitialDelay = getColdConfig("com.xyniac.abstractconfig.RemoteConfig$").get("initialDelay").getAsLong
+
+  private val handler: ScheduledFuture[String] = {
+    logger.info("initial task handler triggered")
+    scheduler.schedule(task, coldDeployedInitialDelay, TimeUnit.MILLISECONDS)
   }
 
   def checkAllConfig(): JsonObject = {
@@ -134,7 +135,32 @@ object AbstractConfig {
     registry.keys.par.foreach(key => result.add(key, registry(key).getConfigJson()))
     result
   }
+  def getColdConfig(jsonFileName: String): JsonObject = {
+    val coldDeployedDefaultConfig: String = Try(Source.fromResource(Paths.get(AbstractConfig.confDirName, jsonFileName).toString).mkString) match {
+      case Success(s) => s
+      case Failure(e) => "{}"
+    }
+    val coldDeployedEnvConfig: String = Try(Source.fromResource(Paths.get(AbstractConfig.confDirName, Environment.env, jsonFileName).toString).mkString) match {
+      case Success(s) => s
+      case Failure(e) => "{}"
+    }
 
+    val coldDeployedIaasConfig: String = Try(Source.fromResource(Paths.get(AbstractConfig.confDirName, Environment.env, Environment.iaas, jsonFileName).toString).mkString) match {
+      case Success(s) => s
+      case Failure(e) => "{}"
+    }
+
+    val coldDeployedRegionConfig: String = Try(Source.fromResource(Paths.get(AbstractConfig.confDirName, Environment.env, Environment.iaas, Environment.region, jsonFileName).toString).mkString) match {
+      case Success(s) => s
+      case Failure(e) => "{}"
+    }
+
+
+    val coldDeployedConfigJson4j = parse(coldDeployedDefaultConfig) merge parse(coldDeployedEnvConfig) merge parse(coldDeployedIaasConfig) merge parse(coldDeployedRegionConfig)
+    val renderedConfigJson = pretty(render(coldDeployedConfigJson4j))
+    val coldDeployedConfig = AbstractConfig.gson.fromJson(renderedConfigJson, classOf[JsonObject])
+    coldDeployedConfig
+  }
 }
 
 abstract class AbstractConfig {
@@ -146,32 +172,9 @@ abstract class AbstractConfig {
   }
 
   val jsonFileName: String = this.getClass.getName
-
-  val coldDeployedDefaultConfig: String = Try(Source.fromResource(Paths.get(AbstractConfig.confDirName, jsonFileName).toString).mkString) match {
-    case Success(s) => s
-    case Failure(e) => "{}"
-  }
-  val coldDeployedEnvConfig: String = Try(Source.fromResource(Paths.get(AbstractConfig.confDirName, Environment.env, jsonFileName).toString).mkString) match {
-    case Success(s) => s
-    case Failure(e) => "{}"
-  }
-
-  val coldDeployedIaasConfig: String = Try(Source.fromResource(Paths.get(AbstractConfig.confDirName, Environment.env, Environment.iaas, jsonFileName).toString).mkString) match {
-    case Success(s) => s
-    case Failure(e) => "{}"
-  }
-
-  val coldDeployedRegionConfig: String = Try(Source.fromResource(Paths.get(AbstractConfig.confDirName, Environment.env, Environment.iaas, Environment.region, jsonFileName).toString).mkString) match {
-    case Success(s) => s
-    case Failure(e) => "{}"
-  }
-
-
-  private val coldDeployedConfigJson4j = parse(coldDeployedDefaultConfig) merge parse(coldDeployedEnvConfig) merge parse(coldDeployedIaasConfig) merge parse(coldDeployedRegionConfig)
-  private val renderedConfigJson = pretty(render(coldDeployedConfigJson4j))
-  private val coldDeployedConfig = AbstractConfig.gson.fromJson(renderedConfigJson, classOf[JsonObject])
+  private val coldDeployedConfig = AbstractConfig.getColdConfig(jsonFileName)
   private[abstractconfig] var hotDeployedConfig:JsonObject = null
-
+  private val remoteConfig = RemoteConfig
 
   def setProperty[T](key: String, value: T): Unit = {
     AbstractConfig.lock.writeLock().lock()

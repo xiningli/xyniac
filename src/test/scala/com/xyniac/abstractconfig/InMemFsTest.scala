@@ -56,7 +56,30 @@ class InMemFsTest extends FunSuite {
 
   }
 
+  test ("test close memory system") {
+    val conf = AbstractConfig.confDirName
+    val fs = new JavaInMemoryFileSystem
+    Files.createDirectory(fs.getPath(conf))
+    val name = TestAbstractConfig.getName()
+    println(name)
+    val newTarget =
+      """
+        |{
+        |  "fileSystemFullyQualifiedName": "com.xyniac.abstractconfig.InMemoryFileSystem",
+        |  "initialDelay": 3000,
+        |  "delay": 10000
+        |}
+      """.stripMargin
 
+    Files.write(fs.getPath(conf, "com.xyniac.abstractconfig.RemoteConfig$"), newTarget.getBytes())
+    println("written the new config")
+    Thread.sleep(20000)
+    assert(InMemFsTest.fileSystemTestSuccessFlag.get())
+    val scalaFs = new InMemoryFileSystem
+    scalaFs.close()
+    Thread.sleep(20000)
+
+  }
 
 
 }
