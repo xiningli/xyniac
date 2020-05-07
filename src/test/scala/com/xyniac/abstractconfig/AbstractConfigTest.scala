@@ -1,5 +1,8 @@
 package com.xyniac.abstractconfig
 
+import java.util.concurrent.atomic.AtomicBoolean
+
+import com.xyniac.hotdeployment.HotDeployment
 import org.scalatest.FunSuite
 import org.json4s._
 import org.json4s.native.JsonMethods._
@@ -12,8 +15,12 @@ object WrongConfig extends AbstractConfig{
   throw new RuntimeException()
 }
 
+object ResultHolder{
+  val result = new AtomicBoolean(false)
+}
+
 class AbstractConfigTest extends FunSuite {
-  test("Correctly read the name Mike") { // Uses ScalaTest assertions
+  test("Correctly read the name Xining") { // Uses ScalaTest assertions
     assert(TestAbstractConfig.getName()=="Xining")
   }
 
@@ -26,7 +33,10 @@ class AbstractConfigTest extends FunSuite {
       case e: Exception => println("manually produced Exception")
     }
 
-    Thread.sleep(20000)
+    Thread.sleep(5000)
+
+    HotDeployment.runScalaCommand("object WrongConfig extends com.xyniac.abstractconfig.AbstractConfig{com.xyniac.abstractconfig.ResultHolder.result.set(true)};WrongConfig")
+    assert(ResultHolder.result.get())
   }
 
 }

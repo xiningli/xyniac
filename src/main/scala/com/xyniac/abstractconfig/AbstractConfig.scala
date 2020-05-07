@@ -182,11 +182,7 @@ object AbstractConfig {
 
 abstract class AbstractConfig {
 
-  if (currentMirror.reflect(this).symbol.isModuleClass) {
-    AbstractConfig.configNames.add(this.getClass.getCanonicalName)
-  } else {
-    throw new IllegalStateException("AbstractConfig must be scala singleton")
-  }
+  AbstractConfig.configNames.add(this.getClass.getCanonicalName)
 
   val jsonFileName: String = this.getClass.getName
   private val coldDeployedConfig = AbstractConfig.getColdConfig(jsonFileName)
