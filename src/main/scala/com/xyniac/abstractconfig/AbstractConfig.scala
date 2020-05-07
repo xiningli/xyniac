@@ -4,8 +4,8 @@ import java.lang.{Exception, RuntimeException, Throwable}
 import java.nio.file.{FileSystem, Files, Paths}
 import java.util.concurrent.locks.{ReadWriteLock, ReentrantReadWriteLock}
 import java.util.concurrent.{Callable, Executors, ScheduledExecutorService, ScheduledFuture, TimeUnit}
-import scala.concurrent.duration._
 
+import scala.concurrent.duration._
 import com.google.gson.{Gson, JsonObject}
 import com.xyniac.environment.Environment
 import org.apache.commons.io.IOUtils
@@ -34,7 +34,8 @@ object AbstractConfig {
   private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor
   private[abstractconfig] lazy val handler: ScheduledFuture[String] = {
     logger.info("initial task handler triggered")
-    scheduler.schedule(task, RemoteConfig.getInitialDelay(), TimeUnit.MILLISECONDS)
+    val initialDelay = RemoteConfig.getInitialDelay()
+    scheduler.schedule(task, initialDelay, TimeUnit.MILLISECONDS)
   }
 
   private val task: Callable[String] = () => {
