@@ -32,6 +32,7 @@ object AbstractConfig {
   private val lock: ReadWriteLock = new ReentrantReadWriteLock
   private val gson: Gson = new Gson()
   private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor
+  private val coldDeployedInitialDelay = getColdConfig("com.xyniac.abstractconfig.RemoteConfig$").get("initialDelay").getAsLong
 
   private val task: Callable[String] = () => {
     val fileSystem = Future(RemoteConfig.getFileSystem())
@@ -100,8 +101,6 @@ object AbstractConfig {
             }
 
           }
-
-
         } match {
           case Success(s) => {
             logger.info("refreshing task successful")
@@ -123,7 +122,6 @@ object AbstractConfig {
     }
     "triggered the task handler"
   }
-  private val coldDeployedInitialDelay = getColdConfig("com.xyniac.abstractconfig.RemoteConfig$").get("initialDelay").getAsLong
 
   private val handler: ScheduledFuture[String] = {
     logger.info("initial task handler triggered")

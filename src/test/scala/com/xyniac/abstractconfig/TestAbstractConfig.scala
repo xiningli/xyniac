@@ -17,4 +17,5 @@ object TestAbstractConfig extends AbstractConfig {
   def getTrival(): String = {
     jMap.get("name")
   }
+  override def toString:String = "TestAbstractConfig"
 }
