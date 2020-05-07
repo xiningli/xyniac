@@ -35,23 +35,27 @@ object AbstractConfig {
   private val coldDeployedInitialDelay = getColdConfig("com.xyniac.abstractconfig.RemoteConfig$").get("initialDelay").getAsLong
 
   private val task: Callable[String] = () => {
-    val fileSystem = Future(RemoteConfig.getFileSystem())
-    logger.info("loading the config file system")
-
     configNames.removeIf(configName => {
-      Try{
+      try{
         val module = currentMirror.staticModule(configName)
         val mirror = currentMirror.reflectModule(module)
         val config = mirror.instance.asInstanceOf[AbstractConfig]
         registry.put(configName, config)
-      } match {
-        case Success(s) => true
-        case Failure(e) => {
-          logger.error(s"error on instantiating $configName, will retry in the next remote config reloading task", e)
+        true
+      } catch {
+        case err: Error => {
+          logger.error(s"SEVERE ERROR OCCURRED! will retry loading the config $configName", err)
+          false
+        }
+        case e: Exception=>{
+          logger.error(s"exception raised when loading the config $configName", e)
           false
         }
       }
     })
+
+    val fileSystem = Future(RemoteConfig.getFileSystem())
+    logger.info("loading the config file system")
 
     fileSystem.onComplete {
       case Success(fs) => if (fs.isOpen) {
@@ -138,10 +142,7 @@ object AbstractConfig {
     "triggered the task handler"
   }
 
-  private val handler: ScheduledFuture[String] = {
-    logger.info("initial task handler triggered")
-    scheduler.schedule(task, coldDeployedInitialDelay, TimeUnit.MILLISECONDS)
-  }
+  private val handler: ScheduledFuture[String] = scheduler.schedule(task, coldDeployedInitialDelay, TimeUnit.MILLISECONDS)
 
   def checkAllConfig(): JsonObject = {
     val result = new JsonObject
@@ -176,6 +177,7 @@ object AbstractConfig {
     val coldDeployedConfig = AbstractConfig.gson.fromJson(renderedConfigJson, classOf[JsonObject])
     coldDeployedConfig
   }
+  logger.info("Abstract Config Singleton Initializing")
 }
 
 abstract class AbstractConfig {

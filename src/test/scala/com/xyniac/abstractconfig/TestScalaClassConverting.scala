@@ -24,17 +24,5 @@ class TestScalaClassConverting extends FunSuite {
     assert(config.getProperty("supervisor", classOf[Supervisor]).toString== "Supervisor(Bob,50)")
   }
 
-  test("test remove in parallel") {
-    val ls = new CopyOnWriteArrayList[Int]
-    for (i<-0 until 100) {
-      ls.add(i)
-    }
-    ls.removeIf(n=>{
-      println(n)
-      true
-    })
-    println(ls)
-
-  }
 
 }
