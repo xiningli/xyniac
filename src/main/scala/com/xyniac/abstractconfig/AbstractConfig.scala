@@ -26,7 +26,7 @@ object AbstractConfig {
   val confDirName: String = "conf"
 
   private val registry = new scala.collection.parallel.mutable.ParHashMap[String, AbstractConfig]
-
+  private val configNames = new java.util.concurrent.CopyOnWriteArrayList[String]
   private val logger = LoggerFactory.getLogger(this.getClass)
   private implicit val formats: DefaultFormats.type = DefaultFormats
   private val lock: ReadWriteLock = new ReentrantReadWriteLock
@@ -37,6 +37,21 @@ object AbstractConfig {
   private val task: Callable[String] = () => {
     val fileSystem = Future(RemoteConfig.getFileSystem())
     logger.info("loading the config file system")
+
+    configNames.removeIf(configName => {
+      Try{
+        val module = currentMirror.staticModule(configName)
+        val mirror = currentMirror.reflectModule(module)
+        val config = mirror.instance.asInstanceOf[AbstractConfig]
+        registry.put(configName, config)
+      } match {
+        case Success(s) => true
+        case Failure(e) => {
+          logger.error(s"error on instantiating $configName, will retry in the next remote config reloading task", e)
+          false
+        }
+      }
+    })
 
     fileSystem.onComplete {
       case Success(fs) => if (fs.isOpen) {
@@ -133,6 +148,8 @@ object AbstractConfig {
     registry.keys.par.foreach(key => result.add(key, registry(key).getConfigJson()))
     result
   }
+
+
   def getColdConfig(jsonFileName: String): JsonObject = {
     val coldDeployedDefaultConfig: String = Try(Source.fromResource(Paths.get(AbstractConfig.confDirName, jsonFileName).toString).mkString) match {
       case Success(s) => s
@@ -164,7 +181,7 @@ object AbstractConfig {
 abstract class AbstractConfig {
 
   if (currentMirror.reflect(this).symbol.isModuleClass) {
-    AbstractConfig.registry.put(this.getClass.getCanonicalName, this)
+    AbstractConfig.configNames.add(this.getClass.getCanonicalName)
   } else {
     throw new IllegalStateException("AbstractConfig must be scala singleton")
   }

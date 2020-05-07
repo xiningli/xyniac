@@ -9,9 +9,9 @@ import org.json4s.DefaultFormats
 import org.json4s.native.JsonMethods.{parse, pretty, render}
 import org.scalatest.FunSuite
 
-import reflect.runtime._
+import reflect.runtime.currentMirror
 import scala.io.Source
-
+import java.util.concurrent.CopyOnWriteArrayList
 class TestScalaClassConverting extends FunSuite {
 
   test("test correctly reload the reflection") {
@@ -22,6 +22,19 @@ class TestScalaClassConverting extends FunSuite {
     val mirror = currentMirror.reflectModule(module)
     val config = mirror.instance.asInstanceOf[AbstractConfig]
     assert(config.getProperty("supervisor", classOf[Supervisor]).toString== "Supervisor(Bob,50)")
+  }
+
+  test("test remove in parallel") {
+    val ls = new CopyOnWriteArrayList[Int]
+    for (i<-0 until 100) {
+      ls.add(i)
+    }
+    ls.removeIf(n=>{
+      println(n)
+      true
+    })
+    println(ls)
+
   }
 
 }

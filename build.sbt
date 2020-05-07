@@ -9,7 +9,7 @@ resolvers ++= Seq(
 scalaVersion := "2.13.0"
 libraryDependencies += "org.scala-lang" % "scala-compiler" % "2.13.0"
 //libraryDependencies += "com.twitter" %% "util-eval" % "6.40.0"
-//libraryDependencies += "org.scala-lang" % "scala-reflect" % "2.13.0"
+libraryDependencies += "org.scala-lang" % "scala-reflect" % "2.13.0"
 
 retrieveManaged := true
 
