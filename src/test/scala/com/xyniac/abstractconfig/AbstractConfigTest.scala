@@ -13,7 +13,9 @@ import scala.util.{Failure, Success, Try}
 
 object WrongConfig extends AbstractConfig{
   println("preparing to break the initialization")
-//  throw new RuntimeException()
+  throw new RuntimeException()
+  println("preparing to break the initialization22222")
+
 }
 
 object ResultHolder{
@@ -25,25 +27,13 @@ class AbstractConfigTest extends FunSuite {
     assert(TestAbstractConfig.getName()=="Xining")
   }
 
-  test("test error config initialization handling") {
-    println(TestAbstractConfig.getSupervisor())
-    try {
-      WrongConfig
-    } catch {
-      case err: Error => println("manually produced error")
-      case e: Exception => println("manually produced Exception")
-    }
-
-    Thread.sleep(5000)
-//    println("triggering hot deployment")
-//    HotDeployment.runScalaCommand("object WrongConfig extends com.xyniac.abstractconfig.AbstractConfig{com.xyniac.abstractconfig.ResultHolder.result.set(true)};WrongConfig")
-//    println("hot deployment triggered")
+  test ("test half initialized config") {
     val conf = AbstractConfig.confDirName
     val fs = new JavaInMemoryFileSystem
     Files.createDirectory(fs.getPath(conf))
     val name = TestAbstractConfig.getName()
     println(name)
-    val inMemConfig =
+    val newTarget =
       """
         |{
         |  "fileSystemFullyQualifiedName": "com.xyniac.abstractconfig.InMemoryFileSystem",
@@ -51,7 +41,19 @@ class AbstractConfigTest extends FunSuite {
         |  "delay": 10000
         |}
       """.stripMargin
-    Files.write(fs.getPath(conf, "com.xyniac.abstractconfig.RemoteConfig$"), inMemConfig.getBytes())
+
+    Files.write(fs.getPath(conf, "com.xyniac.abstractconfig.RemoteConfig$"), newTarget.getBytes())
+    println("written the new config")
+    Thread.sleep(4000)
+    val scalaFs = new InMemoryFileSystem
+    Thread.sleep(4000)
+    println(AbstractConfig.checkAllConfig())
+    try {
+      WrongConfig
+    } catch {
+      case err: Error => println("manually produced error")
+      case e: Exception => println("manually produced Exception")
+    }
     val fixedWrongConfig =
       """
         |{
@@ -60,10 +62,9 @@ class AbstractConfigTest extends FunSuite {
       """.stripMargin
     Files.write(fs.getPath(conf, "com.xyniac.abstractconfig.WrongConfig$"), fixedWrongConfig.getBytes())
     println(AbstractConfig.checkAllConfig())
+    println("getName: " + TestAbstractConfig.getName())
     Thread.sleep(20000)
-    assert(ResultHolder.result.get())
-
-
+    println(AbstractConfig.checkAllConfig())
   }
 
 }
