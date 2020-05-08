@@ -78,6 +78,8 @@ class InMemFsTest extends FunSuite {
     val scalaFs = new InMemoryFileSystem
     scalaFs.close()
     Thread.sleep(20000)
+    println(AbstractConfig.checkAllConfig())
+
 
   }
 

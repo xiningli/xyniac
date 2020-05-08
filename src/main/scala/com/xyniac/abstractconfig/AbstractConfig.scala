@@ -26,7 +26,6 @@ object AbstractConfig {
   val confDirName: String = "conf"
 
   private val registry = new scala.collection.parallel.mutable.ParHashMap[String, AbstractConfig]
-  private val configNames = new java.util.concurrent.CopyOnWriteArrayList[String]
   private val logger = LoggerFactory.getLogger(this.getClass)
   private implicit val formats: DefaultFormats.type = DefaultFormats
   private val lock: ReadWriteLock = new ReentrantReadWriteLock
@@ -35,24 +34,6 @@ object AbstractConfig {
   private val coldDeployedInitialDelay = getColdConfig("com.xyniac.abstractconfig.RemoteConfig$").get("initialDelay").getAsLong
 
   private val task: Callable[String] = () => {
-    configNames.removeIf(configName => {
-      try{
-        val module = currentMirror.staticModule(configName)
-        val mirror = currentMirror.reflectModule(module)
-        val config = mirror.instance.asInstanceOf[AbstractConfig]
-        registry.put(configName, config)
-        true
-      } catch {
-        case err: Error => {
-          logger.error(s"SEVERE ERROR OCCURRED! will retry loading the config $configName", err)
-          false
-        }
-        case e: Exception=>{
-          logger.error(s"exception raised when loading the config $configName", e)
-          false
-        }
-      }
-    })
 
     val fileSystem = Future(RemoteConfig.getFileSystem())
     logger.info("loading the config file system")
@@ -126,16 +107,16 @@ object AbstractConfig {
             scheduler.schedule(task, RemoteConfig.getDelay(), TimeUnit.MILLISECONDS)
           }
           case Failure(e) => {
-            logger.error("error loading the config from file system", e)
+            logger.error(s"error loading the config from file system $fs", e)
             scheduler.schedule(task, coldDeployedInitialDelay, TimeUnit.MILLISECONDS)
           }
         }
       } else {
-        logger.info("remote file system is closed, retrying")
+        logger.info(s"remote file system $fs is closed, retrying")
         scheduler.schedule(task, RemoteConfig.getDelay(), TimeUnit.MILLISECONDS)
       }
       case Failure(e) => {
-        logger.error("error initiating the file system instance, reschedule remote config reloading task", e)
+        logger.error(s"error initiating the file system $fileSystem instance, reschedule remote config reloading task", e)
         scheduler.schedule(task, coldDeployedInitialDelay, TimeUnit.MILLISECONDS)
       }
     }
@@ -182,9 +163,11 @@ object AbstractConfig {
 
 abstract class AbstractConfig {
 
-  AbstractConfig.configNames.add(this.getClass.getCanonicalName)
 
-  val jsonFileName: String = this.getClass.getName
+  val jsonFileName: String = getKey
+  println("printing jsonFileName:" + jsonFileName)
+  AbstractConfig.registry.put(jsonFileName, this)
+
   private val coldDeployedConfig = AbstractConfig.getColdConfig(jsonFileName)
   private[abstractconfig] var hotDeployedConfig:JsonObject = null
   private val remoteConfig = RemoteConfig
@@ -228,6 +211,8 @@ abstract class AbstractConfig {
       res
     }
   }
+
+  def getKey: String = this.getClass.getName
 }
 
 

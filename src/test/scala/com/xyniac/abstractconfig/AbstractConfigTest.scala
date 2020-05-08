@@ -1,5 +1,6 @@
 package com.xyniac.abstractconfig
 
+import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicBoolean
 
 import com.xyniac.hotdeployment.HotDeployment
@@ -12,7 +13,7 @@ import scala.util.{Failure, Success, Try}
 
 object WrongConfig extends AbstractConfig{
   println("preparing to break the initialization")
-  throw new RuntimeException()
+//  throw new RuntimeException()
 }
 
 object ResultHolder{
@@ -25,7 +26,7 @@ class AbstractConfigTest extends FunSuite {
   }
 
   test("test error config initialization handling") {
-    TestAbstractConfig.getSupervisor()
+    println(TestAbstractConfig.getSupervisor())
     try {
       WrongConfig
     } catch {
@@ -34,9 +35,35 @@ class AbstractConfigTest extends FunSuite {
     }
 
     Thread.sleep(5000)
-
-    HotDeployment.runScalaCommand("object WrongConfig extends com.xyniac.abstractconfig.AbstractConfig{com.xyniac.abstractconfig.ResultHolder.result.set(true)};WrongConfig")
+//    println("triggering hot deployment")
+//    HotDeployment.runScalaCommand("object WrongConfig extends com.xyniac.abstractconfig.AbstractConfig{com.xyniac.abstractconfig.ResultHolder.result.set(true)};WrongConfig")
+//    println("hot deployment triggered")
+    val conf = AbstractConfig.confDirName
+    val fs = new JavaInMemoryFileSystem
+    Files.createDirectory(fs.getPath(conf))
+    val name = TestAbstractConfig.getName()
+    println(name)
+    val inMemConfig =
+      """
+        |{
+        |  "fileSystemFullyQualifiedName": "com.xyniac.abstractconfig.InMemoryFileSystem",
+        |  "initialDelay": 3000,
+        |  "delay": 10000
+        |}
+      """.stripMargin
+    Files.write(fs.getPath(conf, "com.xyniac.abstractconfig.RemoteConfig$"), inMemConfig.getBytes())
+    val fixedWrongConfig =
+      """
+        |{
+        |  "flag": true,
+        |}
+      """.stripMargin
+    Files.write(fs.getPath(conf, "com.xyniac.abstractconfig.WrongConfig$"), fixedWrongConfig.getBytes())
+    println(AbstractConfig.checkAllConfig())
+    Thread.sleep(20000)
     assert(ResultHolder.result.get())
+
+
   }
 
 }

@@ -12,9 +12,16 @@ import org.scalatest.FunSuite
 import reflect.runtime.currentMirror
 import scala.io.Source
 import java.util.concurrent.CopyOnWriteArrayList
-class TestScalaClassConverting extends FunSuite {
 
-  test("test correctly reload the reflection") {
+import com.xyniac.hotdeployment.HotDeployment
+
+object ReflectionTesting{
+  var classLoaderHolder:ClassLoader = null
+}
+
+class ReflectionTesting extends FunSuite {
+
+  test("test correctly reload the reflection in AppClassLoader") {
     System.setProperty("iaas", "aws")
     System.setProperty("env", "dev")
     System.setProperty("region", "EU_NORTH_1")
@@ -23,6 +30,5 @@ class TestScalaClassConverting extends FunSuite {
     val config = mirror.instance.asInstanceOf[AbstractConfig]
     assert(config.getProperty("supervisor", classOf[Supervisor]).toString== "Supervisor(Bob,50)")
   }
-
 
 }
