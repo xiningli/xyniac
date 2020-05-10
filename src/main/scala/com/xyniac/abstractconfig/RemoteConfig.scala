@@ -2,6 +2,10 @@ package com.xyniac.abstractconfig
 
 import java.nio.file.FileSystem
 
+/**
+  * Created by Xining Li on May/10/2020
+  */
+
 object RemoteConfig extends AbstractDynamicConfig {
 
   def getInitialDelay: Long = {

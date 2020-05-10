@@ -17,6 +17,10 @@ import scala.io.Source
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.blocking
 
+/**
+  * Created by Xining Li on May/10/2020
+  */
+
 object AbstractDynamicConfig {
   val confDirName: String = "conf"
 

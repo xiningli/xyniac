@@ -2,6 +2,9 @@ package com.xyniac.abstractconfig
 
 import java.util.concurrent.atomic.AtomicBoolean
 import org.scalatest.FunSuite
+/**
+  * Created by Xining Li on May/10/2020
+  */
 
 object InMemFsTest {
   val fileSystemTestSuccessFlag = new AtomicBoolean(false)
