@@ -26,7 +26,11 @@ object AbstractDynamicConfig {
   private val lock: ReadWriteLock = new ReentrantReadWriteLock
   private val gson: Gson = new Gson()
   private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor
-  private val coldDeployedInitialDelay = getColdConfig("com.xyniac.abstractconfig.RemoteConfig$").get("initialDelay").getAsLong
+  private val coldDeployedInitialDelay = try {
+    getColdConfig("com.xyniac.abstractconfig.RemoteConfig$").get("initialDelay").getAsLong
+  } catch {
+    case _: Exception => throw new ExceptionInInitializerError("com.xyniac.abstractconfig.RemoteConfig$ not defined")
+  }
 
   private val task: Callable[String] = () => {
 
