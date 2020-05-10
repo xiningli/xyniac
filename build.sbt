@@ -1,6 +1,5 @@
-name := "xyniac"
+name := "dynamic-config"
 
-version := "0.1"
 resolvers ++= Seq(
   "Typesafe" at "http://repo.typesafe.com/typesafe/releases/",
   "Maven" at "https://repo1.maven.org/maven2/",
