@@ -1,4 +1,7 @@
-name := "dynamic-config"
+import sbt.Keys.scalaVersion
+import sbtassembly.AssemblyKeys._
+
+name := "xyniac-dynamic-config"
 
 resolvers ++= Seq(
   "Typesafe" at "http://repo.typesafe.com/typesafe/releases/",
@@ -8,17 +11,15 @@ resolvers ++= Seq(
 
 lazy val commonSettings = Seq(
   organization := "com.xyniac",
-  version := "0.1.0-SNAPSHOT"
+  version := "0.1.0-SNAPSHOT",
+  scalaVersion := "2.13.0"
 )
 
 lazy val app = (project in file(".")).
   settings(commonSettings: _*).
-  settings(
-    name := "fat-jar-test"
-  ).enablePlugins()
+  enablePlugins()
 
 
-scalaVersion in ThisBuild := "2.13.0"
 libraryDependencies += "org.scala-lang" % "scala-compiler" % "2.13.0"
 libraryDependencies += "org.scala-lang" % "scala-reflect" % "2.13.0"
 
