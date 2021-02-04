@@ -1,6 +1,5 @@
 import sbt.Keys.scalaVersion
-import sbtassembly.AssemblyKeys._
-useGpg := true
+
 name := "xyniac-dynamic-config"
 
 resolvers ++= Seq(
@@ -12,7 +11,7 @@ resolvers ++= Seq(
 
 lazy val commonSettings = Seq(
   organization := "com.xyniac",
-  version := "0.1.0-SNAPSHOT",
+  version := "0.1.1-SNAPSHOT",
   scalaVersion := "2.13.0"
 )
 

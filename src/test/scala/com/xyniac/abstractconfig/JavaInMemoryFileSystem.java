@@ -35,7 +35,7 @@ public class JavaInMemoryFileSystem extends FileSystem {
 
     @Override
     public void close() throws IOException {
-        InMemFsTest.fsCloseFlag().set(true);
+//        InMemFsTest.fsCloseFlag().set(true);
         inMemFileStore.close();
     }
 
